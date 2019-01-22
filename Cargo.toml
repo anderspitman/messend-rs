@@ -1,0 +1,10 @@
+[package]
+name = "messy_tcp"
+version = "0.1.0"
+authors = ["Anders Pitman <tapitman11@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+
+[lib]
+crate-type = ["staticlib", "rlib"]
