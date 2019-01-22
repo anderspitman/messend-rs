@@ -1,5 +1,5 @@
 use std::{thread, time};
-use messy_tcp::Initiator;
+use messtcp::Initiator;
 
 fn main() {
     let initiator = Initiator::new();
