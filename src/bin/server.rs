@@ -1,4 +1,4 @@
-use messtcp::Acceptor;
+use messend::Acceptor;
 
 fn main() {
     let acceptor = Acceptor::new("127.0.0.1:9001");
