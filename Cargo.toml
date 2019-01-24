@@ -5,6 +5,8 @@ authors = ["Anders Pitman <tapitman11@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+libc = "*"
+byteorder = "*"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

@@ -1,13 +1,13 @@
-use messend::Acceptor;
+//use messend::Acceptor;
 
 fn main() {
-    let acceptor = Acceptor::new("127.0.0.1:9001");
+    //let acceptor = Acceptor::new("127.0.0.1:9001");
 
-    let mut peer = acceptor.accept();
+    //let mut peer = acceptor.accept();
 
-    loop {
-        let message = peer.receive_message();
-        println!("{:?}", message);
-        peer.send_message(&[1,2,3,4]);
-    }
+    //loop {
+    //    let message = peer.receive_message();
+    //    println!("{:?}", message);
+    //    peer.send_message(&[1,2,3,4]);
+    //}
 }
