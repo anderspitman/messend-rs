@@ -23,11 +23,13 @@ pub extern fn messend_shutdown() {
 
 #[no_mangle]
 pub extern fn messend_acceptor_create(host: *const c_char, port: uint16_t) -> *mut Acceptor {
-    unsafe {
-        let host = CStr::from_ptr(host).to_owned().into_string().unwrap();
-        let addr = format!("{}:{}", host, port);
-        Box::into_raw(Box::new(Acceptor::new(addr)))
-    }
+    let host = unsafe {
+        CStr::from_ptr(host)
+    };
+
+    let host = host.to_owned().into_string().unwrap();
+    let addr = format!("{}:{}", host, port);
+    Box::into_raw(Box::new(Acceptor::new(addr)))
 }
 
 #[no_mangle]
@@ -52,10 +54,12 @@ pub extern fn messend_acceptor_accept_wait(ptr: *mut Acceptor) -> *mut Peer {
 
 #[no_mangle]
 pub extern fn messend_initiate(host: *const c_char, port: uint16_t) -> *mut Peer {
-    let addr = unsafe {
-        let host = CStr::from_ptr(host).to_owned().into_string().unwrap();
-        format!("{}:{}", host, port)
+    let host = unsafe {
+        CStr::from_ptr(host)
     };
+
+    let host = host.to_owned().into_string().unwrap();
+    let addr = format!("{}:{}", host, port);
 
     let stream = TcpStream::connect(addr).unwrap();
     Box::into_raw(Box::new(Peer::new(stream)))
@@ -69,6 +73,16 @@ pub extern fn messend_peer_free(ptr: *mut Peer) {
     unsafe {
         Box::from_raw(ptr);
     }
+}
+
+#[no_mangle]
+pub extern fn messend_peer_is_connected(ptr: *mut Peer) -> bool {
+    let peer = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    peer.is_connected
 }
 
 #[no_mangle]
@@ -154,12 +168,14 @@ impl Acceptor {
 }
 
 pub struct Peer {
+    pub is_connected: bool,
     stream: TcpStream,
 }
 
 impl Peer {
     fn new(stream: TcpStream) -> Peer {
         Peer {
+            is_connected: true,
             stream,
         }
     }
@@ -167,14 +183,21 @@ impl Peer {
     pub fn send_message(&mut self, message: &[u8]) -> bool {
         let mut buf = [0; 4];
         NetworkEndian::write_u32(&mut buf, message.len() as u32);
+        // TODO: flatten out this nesting
         match self.stream.write(&buf) {
             Ok(_) => {
                 match self.stream.write(message) {
                     Ok(_) => true,
-                    Err(_) => false,
+                    Err(_) => {
+                        self.is_connected = false;
+                        false
+                    }
                 }
             }
-            Err(_) => false,
+            Err(_) => {
+                self.is_connected = false;
+                false
+            }
         }
     }
 
@@ -193,12 +216,14 @@ impl Peer {
                         Some(vec)
                     }
                     Err(_) => {
+                        self.is_connected = false;
                         None
                     }
                 }
 
             }
             Err(_) => {
+                self.is_connected = false;
                 None
             }
         }
