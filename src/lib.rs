@@ -62,23 +62,38 @@ pub extern fn messend_initiate(host: *const c_char, port: uint16_t) -> *mut Peer
 }
 
 #[no_mangle]
-pub extern fn messend_peer_receive_message_wait(ptr: *mut Peer) -> CMessage {
+pub extern fn messend_peer_free(ptr: *mut Peer) {
+    if ptr.is_null() {
+        return
+    }
+    unsafe {
+        Box::from_raw(ptr);
+    }
+}
+
+#[no_mangle]
+pub extern fn messend_peer_receive_message_wait(ptr: *mut Peer) -> *const CMessage {
     let peer = unsafe {
         assert!(!ptr.is_null());
         &mut *ptr
     };
 
-    let message = peer.receive_message_wait();
+    match peer.receive_message_wait() {
 
-    //let mut buf = vec![0; 512].into_boxed_slice();
-    let mut buf = message.into_boxed_slice();
-    let data = buf.as_mut_ptr();
-    let len = buf.len();
-    std::mem::forget(buf);
+        Some(message) => {
+            let mut buf = message.into_boxed_slice();
+            let data = buf.as_mut_ptr();
+            let len = buf.len();
+            std::mem::forget(buf);
 
-    CMessage {
-        data,
-        size: len as u64,
+            Box::into_raw(Box::new(CMessage {
+                data,
+                size: len as u64,
+            }))
+        }
+        None => {
+            std::ptr::null()
+        }
     }
 }
 
@@ -97,13 +112,21 @@ pub extern fn messend_peer_send_message(ptr: *mut Peer, message: CMessage) {
 }
 
 #[no_mangle]
-pub extern fn messend_message_free(message: CMessage) {
+pub extern fn messend_message_free(ptr: *mut CMessage) {
+
+    let message = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
     let s = unsafe { 
         std::slice::from_raw_parts_mut(message.data, message.size as usize)
     };
+
     let s = s.as_mut_ptr();
     unsafe {
         Box::from_raw(s);
+        Box::from_raw(ptr);
     }
 }
 
@@ -141,23 +164,43 @@ impl Peer {
         }
     }
 
-    pub fn send_message(&mut self, message: &[u8]) {
+    pub fn send_message(&mut self, message: &[u8]) -> bool {
         let mut buf = [0; 4];
         NetworkEndian::write_u32(&mut buf, message.len() as u32);
-        self.stream.write(&buf).unwrap();
-        self.stream.write(message).unwrap();
+        match self.stream.write(&buf) {
+            Ok(_) => {
+                match self.stream.write(message) {
+                    Ok(_) => true,
+                    Err(_) => false,
+                }
+            }
+            Err(_) => false,
+        }
     }
 
-    pub fn receive_message_wait(&mut self) -> Vec<u8> {
+    // TODO: return a result
+    pub fn receive_message_wait(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 4];
 
-        self.stream.read_exact(&mut buf).unwrap();
+        match self.stream.read_exact(&mut buf) {
 
-        let size = NetworkEndian::read_u32(&buf);
+            Ok(_) => {
+                let size = NetworkEndian::read_u32(&buf);
 
-        let mut vec = vec![0; size as usize];
-        self.stream.read_exact(&mut vec).unwrap();
+                let mut vec = vec![0; size as usize];
+                match self.stream.read_exact(&mut vec) {
+                    Ok(_) => {
+                        Some(vec)
+                    }
+                    Err(_) => {
+                        None
+                    }
+                }
 
-        vec
+            }
+            Err(_) => {
+                None
+            }
+        }
     }
 }
