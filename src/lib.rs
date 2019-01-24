@@ -42,6 +42,17 @@ pub extern fn messend_acceptor_accept_wait(ptr: *mut Acceptor) -> *mut Peer {
     Box::into_raw(Box::new(acceptor.accept_wait()))
 }
 
+#[no_mangle]
+pub extern fn messend_initiate(host: *const c_char, port: uint16_t) -> *mut Peer {
+    let addr = unsafe {
+        let host = CStr::from_ptr(host).to_owned().into_string().unwrap();
+        format!("{}:{}", host, port)
+    };
+
+    let stream = TcpStream::connect(addr).unwrap();
+    Box::into_raw(Box::new(Peer::new(stream)))
+}
+
 //#[no_mangle]
 //pub extern fn peer_send_message(mut peer: Peer, message: *const u8, size: u64) {
 //
@@ -57,6 +68,7 @@ pub extern fn messend_acceptor_accept_wait(ptr: *mut Acceptor) -> *mut Peer {
 //    peer.send_message(&out)
 //}
 //
+
 #[no_mangle]
 pub extern fn messend_peer_receive_message_wait(ptr: *mut Peer) -> CMessage {
     let peer = unsafe {
