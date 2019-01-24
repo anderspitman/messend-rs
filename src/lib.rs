@@ -5,6 +5,14 @@ use libc::{c_char, uint8_t, uint16_t, uint64_t};
 use byteorder::{ByteOrder, NetworkEndian};
 
 
+// C Interface
+
+#[repr(C)]
+pub struct CMessage {
+    data: *mut uint8_t,
+    size: uint64_t,
+}
+
 // These are here for compatibility with the SDL version.
 #[no_mangle]
 pub extern fn messend_startup() {
@@ -53,22 +61,6 @@ pub extern fn messend_initiate(host: *const c_char, port: uint16_t) -> *mut Peer
     Box::into_raw(Box::new(Peer::new(stream)))
 }
 
-//#[no_mangle]
-//pub extern fn peer_send_message(mut peer: Peer, message: *const u8, size: u64) {
-//
-//    let mut out = Vec::new();
-//
-//    unsafe {
-//        for i in 0..size {
-//            let byte = *message.offset(i as isize);
-//            out.push(byte)
-//        }
-//    }
-//
-//    peer.send_message(&out)
-//}
-//
-
 #[no_mangle]
 pub extern fn messend_peer_receive_message_wait(ptr: *mut Peer) -> CMessage {
     let peer = unsafe {
@@ -77,7 +69,6 @@ pub extern fn messend_peer_receive_message_wait(ptr: *mut Peer) -> CMessage {
     };
 
     let message = peer.receive_message_wait();
-    //println!("{:?}", message);
 
     //let mut buf = vec![0; 512].into_boxed_slice();
     let mut buf = message.into_boxed_slice();
@@ -102,7 +93,6 @@ pub extern fn messend_peer_send_message(ptr: *mut Peer, message: CMessage) {
         &mut *ptr
     };
 
-    println!("{:?}", s);
     peer.send_message(s);
 }
 
@@ -118,6 +108,9 @@ pub extern fn messend_message_free(message: CMessage) {
 }
 
 
+
+
+// Native Rust
 
 pub struct Acceptor {
     listener: TcpListener,
@@ -136,24 +129,7 @@ impl Acceptor {
         Peer::new(stream)
     }
 }
-//
-//pub struct Initiator {
-//}
-//
-//impl Initiator {
-//    // TODO: return a Result type
-//    pub fn new() -> Initiator {
-//
-//        Initiator {
-//        }
-//    }
-//
-//    pub fn initiate<A: ToSocketAddrs>(&self, addr: A) -> Peer {
-//        let stream = TcpStream::connect(addr).unwrap();
-//        Peer::new(stream)
-//    }
-//}
-//
+
 pub struct Peer {
     stream: TcpStream,
 }
@@ -178,25 +154,10 @@ impl Peer {
         self.stream.read_exact(&mut buf).unwrap();
 
         let size = NetworkEndian::read_u32(&buf);
-        //println!("{}", size);
 
         let mut vec = vec![0; size as usize];
         self.stream.read_exact(&mut vec).unwrap();
 
         vec
-    }
-}
-
-#[repr(C)]
-pub struct CMessage {
-    data: *mut uint8_t,
-    size: uint64_t,
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }
