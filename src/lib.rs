@@ -43,6 +43,23 @@ pub extern fn messend_acceptor_free(ptr: *mut Acceptor) {
 }
 
 #[no_mangle]
+pub extern fn messend_acceptor_accept(ptr: *mut Acceptor) -> *const Peer {
+    let acceptor = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    match acceptor.accept() {
+        Some(peer) => {
+            Box::into_raw(Box::new(peer))
+        },
+        None => {
+            std::ptr::null()
+        }
+    }
+}
+
+#[no_mangle]
 pub extern fn messend_acceptor_accept_wait(ptr: *mut Acceptor) -> *mut Peer {
     let acceptor = unsafe {
         assert!(!ptr.is_null());
@@ -83,6 +100,32 @@ pub extern fn messend_peer_is_connected(ptr: *mut Peer) -> bool {
     };
 
     peer.is_connected
+}
+
+#[no_mangle]
+pub extern fn messend_peer_receive_message(ptr: *mut Peer) -> *const CMessage {
+    let peer = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    match peer.receive_message() {
+
+        Some(message) => {
+            let mut buf = message.into_boxed_slice();
+            let data = buf.as_mut_ptr();
+            let len = buf.len();
+            std::mem::forget(buf);
+
+            Box::into_raw(Box::new(CMessage {
+                data,
+                size: len as u64,
+            }))
+        }
+        None => {
+            std::ptr::null()
+        }
+    }
 }
 
 #[no_mangle]
@@ -160,8 +203,22 @@ impl Acceptor {
         }
     }
 
+    pub fn accept(&self) -> Option<Peer> {
+
+        self.listener.set_nonblocking(true).expect("set nonblocking true");
+        match self.listener.accept() {
+            Ok((stream, _)) => {
+                Some(Peer::new(stream))
+            },
+            Err(_) => {
+                None
+            }
+        }
+    }
+
     pub fn accept_wait(&self) -> Peer {
 
+        self.listener.set_nonblocking(false).expect("set nonblocking false");
         let stream = self.listener.accept().unwrap().0;
         Peer::new(stream)
     }
@@ -181,6 +238,9 @@ impl Peer {
     }
 
     pub fn send_message(&mut self, message: &[u8]) -> bool {
+
+        //self.stream.set_nonblocking(false).expect("set nonblocking false");
+
         let mut buf = [0; 4];
         NetworkEndian::write_u32(&mut buf, message.len() as u32);
         // TODO: flatten out this nesting
@@ -201,9 +261,38 @@ impl Peer {
         }
     }
 
+    pub fn receive_message(&mut self) -> Option<Vec<u8>> {
+        let mut buf = [0; 4];
+
+        self.stream.set_nonblocking(true).expect("set nonblocking true");
+
+        match self.stream.read_exact(&mut buf) {
+
+            Ok(_) => {
+                let size = NetworkEndian::read_u32(&buf);
+
+                let mut vec = vec![0; size as usize];
+                match self.stream.read_exact(&mut vec) {
+                    Ok(_) => {
+                        Some(vec)
+                    }
+                    Err(_) => {
+                        None
+                    }
+                }
+
+            }
+            Err(_) => {
+                None
+            }
+        }
+    }
+
     // TODO: return a result
     pub fn receive_message_wait(&mut self) -> Option<Vec<u8>> {
         let mut buf = [0; 4];
+
+        self.stream.set_nonblocking(false).expect("set nonblocking true");
 
         match self.stream.read_exact(&mut buf) {
 
