@@ -12,6 +12,9 @@ fn main() {
         }
 
         println!("{:?}", message);
-        peer.send_message(&message.expect("message"));
+        println!("send");
+        let message = message.expect("message");
+        let seq_num = message[0] + 1;
+        peer.send_message(&[seq_num]);
     }
 }

@@ -232,6 +232,9 @@ impl Acceptor {
 pub struct Peer {
     pub is_connected: bool,
     stream: TcpStream,
+    // This is for if the size is successfully read, but the payload would
+    // block so we need to save the size for later.
+    saved_size: Option<u32>,
 }
 
 impl Peer {
@@ -239,6 +242,7 @@ impl Peer {
         Peer {
             is_connected: true,
             stream,
+            saved_size: None,
         }
     }
 
@@ -267,25 +271,49 @@ impl Peer {
     }
 
     pub fn receive_message(&mut self) -> Option<Vec<u8>> {
-        let mut buf = [0; 4];
+        let mut size_buf = [0; 4];
 
         self.stream.set_nonblocking(true).expect("set nonblocking true");
 
-        match self.stream.read_exact(&mut buf) {
+        if let Some(size) = self.saved_size {
+            let payload = self.read_payload(size);
 
-            Ok(_) => {
-                let size = NetworkEndian::read_u32(&buf);
+            if !payload.is_none() {
+                self.saved_size = None;
+            }
 
-                let mut vec = vec![0; size as usize];
-                match self.stream.read_exact(&mut vec) {
-                    Ok(_) => {
-                        Some(vec)
+            payload
+        }
+        else {
+            match self.stream.read_exact(&mut size_buf) {
+
+                Ok(_) => {
+                    let size = NetworkEndian::read_u32(&size_buf);
+
+                    let payload = self.read_payload(size);
+                    if payload.is_none() {
+                        self.saved_size = Some(size);
                     }
-                    Err(_) => {
-                        None
-                    }
+
+                    payload
                 }
+                Err(_) => {
+                    None
+                }
+            }
+        }
+    }
 
+    fn read_payload(&mut self, size: u32) -> Option<Vec<u8>> {
+
+        // TODO: this vec can probably be replaced with a struct-level one
+        // in order to avoid allocating every time. So we'd only perform a
+        // copy to a fresh vec if it was successfully read.
+        let mut vec = vec![0; size as usize];
+
+        match self.stream.read_exact(&mut vec) {
+            Ok(_) => {
+                Some(vec)
             }
             Err(_) => {
                 None
