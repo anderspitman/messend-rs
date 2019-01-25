@@ -192,6 +192,11 @@ pub extern fn messend_message_free(ptr: *mut CMessage) {
 
 // Native Rust
 
+pub fn initiate<A: ToSocketAddrs>(addr: A) -> Peer {
+    let stream = TcpStream::connect(addr).expect("connect");
+    Peer::new(stream)
+}
+
 pub struct Acceptor {
     listener: TcpListener,
 }
