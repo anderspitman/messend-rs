@@ -197,6 +197,11 @@ pub fn initiate<A: ToSocketAddrs>(addr: A) -> Peer {
     Peer::new(stream)
 }
 
+pub fn accept_wait<A: ToSocketAddrs>(addr: A) -> Peer {
+    let acceptor = Acceptor::new(addr);
+    acceptor.accept_wait()
+}
+
 pub struct Acceptor {
     listener: TcpListener,
 }
