@@ -9,4 +9,4 @@ libc = "*"
 byteorder = "*"
 
 [lib]
-crate-type = ["staticlib", "rlib"]
+crate-type = ["staticlib", "rlib", "cdylib"]

@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use libc::{c_char, uint8_t, uint16_t, uint64_t};
+use libc::{c_char, c_uchar, uint8_t, uint16_t, uint32_t, uint64_t};
 use byteorder::{ByteOrder, NetworkEndian};
 
 
@@ -154,6 +154,35 @@ pub extern fn messend_peer_receive_message_wait(ptr: *mut Peer) -> *const CMessa
 }
 
 #[no_mangle]
+pub extern fn messend_peer_receive_message_wait_new(ptr: *mut Peer, out_msg: *mut *mut uint8_t, out_size: *mut uint32_t) {
+    let peer = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    match peer.receive_message_wait() {
+
+        Some(message) => {
+            let mut buf = message.into_boxed_slice();
+            let data = buf.as_mut_ptr();
+            let len = buf.len();
+            std::mem::forget(buf);
+
+            unsafe {
+                *out_msg = data;
+                *out_size = len as uint32_t;
+            }
+        }
+        None => {
+            unsafe {
+                *out_msg = std::ptr::null::<*mut uint8_t>() as *mut uint8_t;
+                *out_size = 0 as uint32_t;
+            }
+        }
+    }
+}
+
+#[no_mangle]
 pub extern fn messend_peer_send_message(ptr: *mut Peer, message: CMessage) {
     let s = unsafe { 
         std::slice::from_raw_parts_mut(message.data, message.size as usize)
@@ -165,6 +194,73 @@ pub extern fn messend_peer_send_message(ptr: *mut Peer, message: CMessage) {
     };
 
     peer.send_message(s);
+}
+
+#[no_mangle]
+pub extern fn messend_peer_send_message_new(ptr: *mut Peer, message: *const c_uchar, size: uint32_t) {
+    let s = unsafe { 
+        assert!(!message.is_null());
+        std::slice::from_raw_parts(message, size as usize)
+    };
+
+    let peer = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    peer.send_message(s);
+}
+
+#[no_mangle]
+//pub extern fn messend_message_create(message: *mut uint8_t, size: uint32_t) -> *mut Vec<u8> {
+pub extern fn messend_message_create(message: *mut uint8_t, size: uint32_t) -> *mut CMessage {
+
+    let mut vec = Vec::new();
+
+    unsafe { 
+        assert!(!message.is_null());
+        // TODO: pretty sure this is a big hack. Should be a more direct way
+        // of doing this
+        let slice = std::slice::from_raw_parts(message, size as usize);
+        for i in 0..size {
+            vec.push(slice[i as usize]);
+        }
+    };
+
+    // need to clone so that the memory is Rust-allocated
+    let mut buf = vec.into_boxed_slice();
+    let data = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+
+    Box::into_raw(Box::new(CMessage {
+        data,
+        size: len as u64,
+    }))
+
+    //Box::into_raw(Box::new(v))
+}
+
+#[no_mangle]
+pub extern fn messend_message_get_size(ptr: *mut CMessage) -> uint64_t {
+
+    let message = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    message.size
+}
+
+#[no_mangle]
+pub extern fn messend_message_get_data(ptr: *mut CMessage) -> *const uint8_t {
+
+    let message = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    message.data
 }
 
 #[no_mangle]
@@ -185,8 +281,6 @@ pub extern fn messend_message_free(ptr: *mut CMessage) {
         Box::from_raw(ptr);
     }
 }
-
-
 
 
 // Native Rust

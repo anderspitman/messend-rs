@@ -2,7 +2,7 @@ use std::{thread, time};
 
 
 fn main() {
-    let mut peer = messend::initiate("127.0.0.1:9001");
+    let mut peer = messend::initiate("127.0.0.1", 9001);
 
     //peer.send_message(&[1,2,3,4]);
     
