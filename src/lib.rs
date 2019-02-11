@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::net::{TcpListener, TcpStream};
 use libc::{c_char, uint8_t, uint16_t, uint64_t};
 use byteorder::{ByteOrder, NetworkEndian};
 
@@ -28,8 +28,7 @@ pub extern fn messend_acceptor_create(host: *const c_char, port: uint16_t) -> *m
     };
 
     let host = host.to_owned().into_string().unwrap();
-    let addr = format!("{}:{}", host, port);
-    Box::into_raw(Box::new(Acceptor::new(addr)))
+    Box::into_raw(Box::new(Acceptor::new(&host, port)))
 }
 
 #[no_mangle]
@@ -76,7 +75,7 @@ pub extern fn messend_initiate(host: *const c_char, port: uint16_t) -> *mut Peer
     };
 
     let host = host.to_owned().into_string().unwrap();
-    let addr = format!("{}:{}", host, port);
+    let addr = make_addr(&host, port);
 
     let stream = TcpStream::connect(addr).unwrap();
     Box::into_raw(Box::new(Peer::new(stream)))
@@ -192,14 +191,19 @@ pub extern fn messend_message_free(ptr: *mut CMessage) {
 
 // Native Rust
 
-pub fn initiate<A: ToSocketAddrs>(addr: A) -> Peer {
+pub fn initiate(host: &str, port: u16) -> Peer {
+    let addr = make_addr(host, port);
     let stream = TcpStream::connect(addr).expect("connect");
     Peer::new(stream)
 }
 
-pub fn accept_wait<A: ToSocketAddrs>(addr: A) -> Peer {
-    let acceptor = Acceptor::new(addr);
+pub fn accept_wait(host: &str, port: u16) -> Peer {
+    let acceptor = Acceptor::new(host, port);
     acceptor.accept_wait()
+}
+
+fn make_addr(host: &str, port: u16) -> String {
+    format!("{}:{}", host, port)
 }
 
 pub struct Acceptor {
@@ -207,7 +211,8 @@ pub struct Acceptor {
 }
 
 impl Acceptor {
-    pub fn new<A: ToSocketAddrs>(addr: A) -> Acceptor {
+    pub fn new(host: &str, port: u16) -> Acceptor {
+        let addr = make_addr(host, port);
         Acceptor {
             listener: TcpListener::bind(addr).unwrap(),
         }
